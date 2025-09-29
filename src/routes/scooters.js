@@ -1,80 +1,85 @@
-const express = require('express');
+const express = require("express");
+const Scooter = require("../models/Scooter");
 const router = express.Router();
-const Scooter = require('../models/Scooter');
-const { auth, adminOnly } = require('../middlewares/auth');
+const auth = require("../middleware/auth")
 
-// GET /api/scooters?lng=..&lat=..&radius=meters
-router.get('/', async (req,res) => {
-  try{
-    const { lng, lat, radius } = req.query;
-    if(lng && lat){
-      const lngN = parseFloat(lng), latN = parseFloat(lat);
-      const maxDistance = radius ? parseInt(radius) : 1000; // meters
-      // $geoNear in aggregation:
-      const nearby = await Scooter.aggregate([
-        {
-          $geoNear: {
-            near: { type: "Point", coordinates: [lngN, latN] },
-            distanceField: "dist.calculated",
-            maxDistance: maxDistance,
-            spherical: true,
-            query: { status: "available" }
-          }
-        }
-      ]);
-      return res.json(nearby);
+// // Add scooter
+// router.post("/", async (req, res) => {
+//     try {
+//         const { model, battery, location } = req.body;
+//         const scooter = new Scooter({ model, battery, location });
+//         await scooter.save();
+//         res.status(201).json(scooter);
+//     } catch (err) {
+//         res.status(500).json({ error: err.message });
+//     }
+// });
+
+// POST new scooter → only admin can create
+router.post("/", auth, async (req, res) => {
+    if (req.user.role !== "admin") {
+      return res.status(403).json({ message: "Access denied" });
     }
-    const list = await Scooter.find();
-    res.json(list);
-  }catch(err){
-    console.error(err);
-    res.status(500).json({ message: 'Server error' });
-  }
+  
+    try {
+      const scooter = await Scooter.create(req.body);
+      res.status(201).json(scooter);
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+// // Get all scooters
+// router.get("/", async (req, res) => {
+//     try {
+//         const scooters = await Scooter.find();
+//         res.json(scooters);
+//     } catch (err) {
+//         res.status(500).json({ error: err.message });
+//     }
+// });
+
+// GET all scooters → only admin can view
+router.get("/", auth, async (req, res) => {
+    if (req.user.role !== "admin") {
+      return res.status(403).json({ message: "Access denied" });
+    }
+  
+    try {
+      const scooters = await Scooter.find();
+      res.json(scooters);
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+  
+
+// Update scooter
+router.put("/:id", async (req, res) => {
+    try {
+        const scooter = await Scooter.findByIdAndUpdate(
+            req.params.id,
+            req.body,
+            { new: true }
+        );
+        if (!scooter)
+            return res.status(404).json({ message: "Scooter not found" });
+        res.json(scooter);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
 });
 
-// create scooter (admin)
-router.post('/', auth, adminOnly, async (req,res) => {
-  try{
-    const data = req.body;
-    // ensure data.location is of form { type: 'Point', coordinates:[lng,lat] }
-    const s = await Scooter.create(data);
-    res.json(s);
-  }catch(err){
-    console.error(err);
-    res.status(500).json({ message: 'Server error' });
-  }
-});
-
-// update
-router.patch('/:id', auth, adminOnly, async (req,res) => {
-  try{
-    const updated = await Scooter.findByIdAndUpdate(req.params.id, req.body, { new: true });
-    res.json(updated);
-  }catch(err){
-    console.error(err);
-    res.status(500).json({ message: 'Server error' });
-  }
-});
-
-// optional: endpoint for scooter/mobile to push location updates (authenticated)
-router.post('/:id/location', auth, async (req,res) => {
-  try{
-    const { coords, battery } = req.body; // coords: [lng,lat]
-    const update = {};
-    if(coords) update.location = { type: 'Point', coordinates: coords };
-    if(battery !== undefined) update.battery = battery;
-    update.lastSeen = new Date();
-    const s = await Scooter.findByIdAndUpdate(req.params.id, update, { new: true });
-    // emit via socket.io to admin room (if server exported io)
-    try{
-      const { io } = require('../../server'); // careful: require circular? server exports io — works here
-      if(io) io.to('admin').emit('scooterLocation', { scooterId: s._id, coords: s.location.coordinates, battery: s.battery });
-    }catch(e){ /* ignore if circular import fails */ }
-    res.json(s);
-  }catch(err){
-    console.error(err);
-    res.status(500).json({ message: 'Server error' });
-  }
+// Delete scooter
+router.delete("/:id", async (req, res) => {
+    try {
+        const scooter = await Scooter.findByIdAndDelete(req.params.id);
+        if (!scooter)
+            return res.status(404).json({ message: "Scooter not found" });
+        res.json({ message: "Scooter deleted" });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
 });
 
 module.exports = router;
