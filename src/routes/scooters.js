@@ -55,7 +55,10 @@ router.get("/", auth, async (req, res) => {
   
 
 // Update scooter
-router.put("/:id", async (req, res) => {
+router.put("/:id", auth, async (req, res) => {
+  if (req.user.role !== "admin") {
+    return res.status(403).json({ message: "Access denied" });
+  }
     try {
         const scooter = await Scooter.findByIdAndUpdate(
             req.params.id,
@@ -72,6 +75,9 @@ router.put("/:id", async (req, res) => {
 
 // Delete scooter
 router.delete("/:id", async (req, res) => {
+  if (req.user.role !== "admin") {
+    return res.status(403).json({ message: "Access denied" });
+  }
     try {
         const scooter = await Scooter.findByIdAndDelete(req.params.id);
         if (!scooter)
