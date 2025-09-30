@@ -74,7 +74,7 @@ router.put("/:id", auth, async (req, res) => {
 });
 
 // Delete scooter
-router.delete("/:id", async (req, res) => {
+router.delete("/:id", auth, async (req, res) => {
   if (req.user.role !== "admin") {
     return res.status(403).json({ message: "Access denied" });
   }
