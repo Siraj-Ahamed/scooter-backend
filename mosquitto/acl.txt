@@ -1,0 +1,29 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# acl.txt — MQTT Topic Access Control List
+#
+# Defines which users can read/write which topics.
+#
+# Syntax:
+#   user <username>
+#   topic read  <topic>     → subscribe only
+#   topic write <topic>     → publish only
+#   topic readwrite <topic> → both
+#
+# Wildcards:  + = single level,  # = all levels
+# ─────────────────────────────────────────────────────────────────────────────
+
+# ── Server (Node.js backend) ──────────────────────────────────────────────────
+# The server subscribes to ALL telemetry from all devices
+# and publishes commands back to any device
+user scooter-server
+topic read  scooters/+/telemetry
+topic write scooters/+/commands
+
+# ── IoT Devices ───────────────────────────────────────────────────────────────
+# Each device can ONLY:
+#   - Publish to its own telemetry topic
+#   - Subscribe to its own commands topic
+# The IMEI is embedded in the topic — enforced at the app layer (mqttService.js)
+user iot-device
+topic write scooters/+/telemetry
+topic read  scooters/+/commands

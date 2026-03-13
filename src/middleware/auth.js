@@ -1,19 +1,49 @@
-const jwt = require("jsonwebtoken");
+const User = require('../models/User');
+const { verifyAccessToken } = require('../utils/jwt');
+const { sendError } = require('../utils/apiResponse');
+const logger = require('../utils/logger');
 
-function authMiddleware(req, res, next) {
-  const token = req.headers["authorization"]?.split(" ")[1]; // "Bearer token"
-  
-  if (!token) {
-    return res.status(401).json({ message: "No token provided" });
-  }
-
+const protect = async (req, res, next) => {
   try {
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    req.user = decoded; // attach user info to request
-    next(); // ✅ allow request to continue
-  } catch (err) {
-    return res.status(401).json({ message: "Invalid or expired token" });
-  }
-}
+    let token;
+    if (req.headers.authorization && req.headers.authorization.startsWith('Bearer')) {
+      token = req.headers.authorization.split(' ')[1];
+    }
 
-module.exports = authMiddleware;
+    if (!token) {
+      return sendError(res, { statusCode: 401, message: 'Access denied. Please log in.' });
+    }
+
+    let decoded;
+    try {
+      decoded = verifyAccessToken(token);
+    } catch (jwtError) {
+      if (jwtError.name === 'TokenExpiredError') {
+        return sendError(res, { statusCode: 401, message: 'Token expired. Please log in again.' });
+      }
+      return sendError(res, { statusCode: 401, message: 'Invalid token.' });
+    }
+
+    const user = await User.findById(decoded.id).select('+passwordChangedAt');
+    if (!user) return sendError(res, { statusCode: 401, message: 'User no longer exists.' });
+    if (!user.isActive) return sendError(res, { statusCode: 401, message: 'Account is deactivated.' });
+    if (user.changedPasswordAfter(decoded.iat)) {
+      return sendError(res, { statusCode: 401, message: 'Password recently changed. Please log in again.' });
+    }
+
+    req.user = user;
+    next();
+  } catch (error) {
+    logger.error(`Auth middleware error: ${error.message}`);
+    return sendError(res, { statusCode: 500, message: 'Authentication error.' });
+  }
+};
+
+const restrictTo = (...roles) => (req, res, next) => {
+  if (!roles.includes(req.user.role)) {
+    return sendError(res, { statusCode: 403, message: 'You do not have permission to perform this action.' });
+  }
+  next();
+};
+
+module.exports = { protect, restrictTo };
