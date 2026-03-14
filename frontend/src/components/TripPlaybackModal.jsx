@@ -159,50 +159,114 @@ const SPEEDS = [
   { label: '8×',   pps: 8   },
 ]
 
-// ── Imperative vehicle mover — lives inside MapContainer, updates Leaflet directly ──
-// This is the key fix: we never re-render the React <Marker> during playback.
-// Instead we get a ref to the Leaflet marker and call .setLatLng() each frame.
-function VehicleLayer({ routePoints, tPosRef, playingRef, follow, color, emoji, startPt, endPt,
-                        onTick, pingColor }) {
-  const map = useMap()
-  const markerRef  = useRef(null)
-  const pingRef    = useRef(null)
-  const rafRef     = useRef(null)
-  const lastTsRef  = useRef(null)
-  const lastPingI  = useRef(-1)   // last integer index we fired a ping at
-  const iconStatic = useRef(makeVehicleIcon(emoji, color))
+// ── Build covered latlngs up to fractional t ────────────────────────────
+// Samples the Catmull-Rom spline at regular sub-steps so the covered
+// polyline follows the exact same curve the vehicle marker traces.
+// STEPS_PER_SEG controls smoothness vs cost — 8 is plenty for GPS data.
+const STEPS_PER_SEG = 8
+function buildCoveredLatLngs(pts, t) {
+  if (!pts.length) return []
+  const out    = [pts[0]]
+  const floorI = Math.min(Math.floor(t), pts.length - 2)
+  // Full segments already passed
+  for (let seg = 0; seg < floorI; seg++) {
+    for (let s = 1; s <= STEPS_PER_SEG; s++) {
+      const pt = catmullRom(pts, seg + s / STEPS_PER_SEG)
+      if (pt) out.push(pt)
+    }
+  }
+  // Partial current segment — sample up to exact fractional t
+  const frac = t - floorI
+  for (let s = 1; s <= STEPS_PER_SEG; s++) {
+    const sub = floorI + (frac * s) / STEPS_PER_SEG
+    if (sub > t) break
+    const pt = catmullRom(pts, sub)
+    if (pt) out.push(pt)
+  }
+  // Final tip — exact vehicle position
+  const tip = catmullRom(pts, t)
+  if (tip) out.push(tip)
+  return out
+}
 
-  // Create the marker once imperatively
+// ── Imperative vehicle + polyline layer ──────────────────────────────────
+// Marker, covered polyline, remaining polyline and ping ring are all updated
+// imperatively every rAF frame — zero React re-renders during playback.
+function VehicleLayer({ routePoints, tPosRef, playingRef, follow, color, emoji, startPt,
+                        onTick, pingColor, isDark }) {
+  const map           = useMap()
+  const markerRef     = useRef(null)
+  const pingRef       = useRef(null)
+  const coveredRef    = useRef(null)   // L.Polyline for travelled path
+  const remainRef     = useRef(null)   // L.Polyline for remaining path
+  const rafRef        = useRef(null)
+  const lastTsRef     = useRef(null)
+  const lastPingI     = useRef(-1)
+  const iconStatic    = useRef(makeVehicleIcon(emoji, color))
+
+  // Create all Leaflet layers once
   useEffect(() => {
     const pos = startPt || routePoints[0] || [6.9271, 79.8612]
+
     const m = L.marker(pos, { icon: iconStatic.current, zIndexOffset: 1000 }).addTo(map)
     markerRef.current = m
 
-    // Ping marker (hidden initially, positioned at 0,0)
     const p = L.marker(pos, { icon: makePingIcon(pingColor), zIndexOffset: 999, opacity: 0 }).addTo(map)
     pingRef.current = p
 
-    return () => { m.remove(); p.remove() }
+    // Covered path — starts empty, grows each frame
+    const cv = L.polyline([], { color, weight: 4.5, opacity: 0.92 }).addTo(map)
+    coveredRef.current = cv
+
+    // Remaining path — starts as full route, shrinks each frame
+    const rm = L.polyline(routePoints.length ? routePoints : [], {
+      color, weight: 2.5, opacity: 0.25,
+    }).addTo(map)
+    remainRef.current = rm
+
+    return () => { m.remove(); p.remove(); cv.remove(); rm.remove() }
   }, []) // eslint-disable-line
 
-  // rAF loop — runs every frame, purely imperative, zero React state updates here
+  // Shared per-frame update — called both from rAF loop and scrub sync
+  const applyT = useCallback((t) => {
+    const pts  = routePoints
+    const pos  = catmullRom(pts, t)
+    if (!pos) return
+
+    // Move vehicle marker
+    if (markerRef.current) markerRef.current.setLatLng(pos)
+
+    // Update covered polyline — tip matches marker exactly
+    if (coveredRef.current) {
+      coveredRef.current.setLatLngs(buildCoveredLatLngs(pts, t))
+    }
+
+    // Update remaining polyline — from smooth tip to raw GPS points ahead
+    if (remainRef.current) {
+      const floorI = Math.min(Math.floor(t), pts.length - 1)
+      // One smooth sub-step then raw GPS points is fine for the dim future path
+      remainRef.current.setLatLngs(floorI < pts.length - 1 ? [pos, ...pts.slice(floorI + 1)] : [])
+    }
+  }, [routePoints]) // eslint-disable-line
+
+  // rAF loop
   const loop = useCallback((ts) => {
     if (!playingRef.current) return
-
-    const pts = routePoints
+    const pts  = routePoints
     const maxT = Math.max(pts.length - 1, 0)
 
     if (lastTsRef.current !== null) {
       const dt = Math.min((ts - lastTsRef.current) / 1000, 0.1)
       tPosRef.current = Math.min(tPosRef.current + playingRef.pps * dt, maxT)
 
-      const pos = catmullRom(pts, tPosRef.current)
-      if (pos && markerRef.current) {
-        markerRef.current.setLatLng(pos)
-        if (follow) map.panTo(pos, { animate: true, duration: 0.15, easeLinearity: 1 })
+      applyT(tPosRef.current)
+
+      if (follow) {
+        const pos = catmullRom(pts, tPosRef.current)
+        if (pos) map.panTo(pos, { animate: true, duration: 0.15, easeLinearity: 1 })
       }
 
-      // Fire ping when crossing a new integer GPS index
+      // Ping at each new GPS integer index
       const currentI = Math.floor(tPosRef.current)
       if (currentI !== lastPingI.current && currentI < pts.length) {
         lastPingI.current = currentI
@@ -210,18 +274,17 @@ function VehicleLayer({ routePoints, tPosRef, playingRef, follow, color, emoji, 
         if (pingRef.current && pt) {
           pingRef.current.setLatLng(pt)
           pingRef.current.setOpacity(1)
-          pingRef.current.setIcon(makePingIcon(pingColor)) // re-create to restart CSS animation
-          // Hide after animation completes
+          pingRef.current.setIcon(makePingIcon(pingColor))
           setTimeout(() => { if (pingRef.current) pingRef.current.setOpacity(0) }, 700)
         }
       }
 
-      // Notify React for UI updates — throttled: only when integer part changes
+      // Throttled React UI update (only on integer index change)
       if (onTick) onTick(tPosRef.current)
 
       if (tPosRef.current >= maxT) {
         playingRef.current = false
-        onTick && onTick(maxT, true) // signal done
+        onTick && onTick(maxT, true)
         lastTsRef.current = null
         return
       }
@@ -229,33 +292,27 @@ function VehicleLayer({ routePoints, tPosRef, playingRef, follow, color, emoji, 
 
     lastTsRef.current = ts
     rafRef.current = requestAnimationFrame(loop)
-  }, [routePoints, follow, map, onTick, pingColor]) // eslint-disable-line
+  }, [routePoints, follow, map, onTick, pingColor, applyT]) // eslint-disable-line
 
-  // Start / stop loop when playingRef.current changes (toggled externally)
+  // Start / stop
   useEffect(() => {
-    const checkAndStart = () => {
-      if (playingRef.current && routePoints.length > 1) {
-        lastTsRef.current = null
-        lastPingI.current = Math.floor(tPosRef.current) - 1
-        rafRef.current = requestAnimationFrame(loop)
-      } else {
-        cancelAnimationFrame(rafRef.current)
-        lastTsRef.current = null
-      }
+    if (playingRef.current && routePoints.length > 1) {
+      lastTsRef.current = null
+      lastPingI.current = Math.floor(tPosRef.current) - 1
+      rafRef.current = requestAnimationFrame(loop)
+    } else {
+      cancelAnimationFrame(rafRef.current)
+      lastTsRef.current = null
     }
-    checkAndStart()
     return () => cancelAnimationFrame(rafRef.current)
   }, [playingRef.current, loop, routePoints.length]) // eslint-disable-line
 
-  // Snap marker when scrubbing (not playing)
+  // Sync on every React render (handles scrubbing)
   useEffect(() => {
-    if (!playingRef.current && markerRef.current && routePoints.length) {
-      const pos = catmullRom(routePoints, tPosRef.current)
-      if (pos) markerRef.current.setLatLng(pos)
-    }
-  }) // runs every render so scrubbing stays in sync
+    if (!playingRef.current) applyT(tPosRef.current)
+  })
 
-  return null // renders nothing into React tree
+  return null
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -397,15 +454,6 @@ export default function TripPlaybackModal({ trip, onClose, vehicleType }) {
   const prevPos    = routePoints[Math.max(floorIdx - 1, 0)]
   const head       = bearing(prevPos, currentPos)
 
-  // Covered polyline — up to current smooth position
-  const coveredPath = [
-    ...routePoints.slice(0, floorIdx + 1),
-    ...(currentPos && floorIdx < routePoints.length - 1 ? [currentPos] : []),
-  ]
-  const remainPath = currentPos
-    ? [currentPos, ...routePoints.slice(floorIdx + 1)]
-    : routePoints.slice(floorIdx)
-
   const hasRoute    = routePoints.length >= 2
   const vehicleName = trip?.vehicle?.name || trip?.scooter?.name || 'Vehicle'
   const maxSpeed    = speeds.length ? Math.max(...speeds) : 1
@@ -474,18 +522,7 @@ export default function TripPlaybackModal({ trip, onClose, vehicleType }) {
                 <Polyline positions={routePoints}
                   pathOptions={{ color: isDark ? '#fff' : '#888', weight: 2, opacity: 0.13, dashArray: '4 5' }} />
               )}
-
-              {/* Remaining path */}
-              {hasRoute && remainPath.length >= 2 && (
-                <Polyline positions={remainPath}
-                  pathOptions={{ color: meta.color, weight: 2.5, opacity: 0.25 }} />
-              )}
-
-              {/* Covered path */}
-              {hasRoute && coveredPath.length >= 2 && (
-                <Polyline positions={coveredPath}
-                  pathOptions={{ color: meta.color, weight: 4.5, opacity: 0.92 }} />
-              )}
+              {/* Covered + remaining polylines are drawn imperatively inside VehicleLayer */}
 
               {/* Milestone markers */}
               {showMilestones && milestones.map((m, i) => (
@@ -504,7 +541,7 @@ export default function TripPlaybackModal({ trip, onClose, vehicleType }) {
                 </Marker>
               )}
 
-              {/* Imperative vehicle + ping layer — no re-renders during playback */}
+              {/* Imperative vehicle + polyline layer — no re-renders during playback */}
               {hasRoute && (
                 <VehicleLayer
                   key={trip?._id}
@@ -515,9 +552,9 @@ export default function TripPlaybackModal({ trip, onClose, vehicleType }) {
                   color={meta.color}
                   emoji={meta.emoji}
                   startPt={startPt}
-                  endPt={endPt}
                   onTick={onTick}
                   pingColor={meta.color}
+                  isDark={isDark}
                 />
               )}
             </MapContainer>

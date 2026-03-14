@@ -1015,8 +1015,9 @@ body, .app-layout, .sidebar, .card, .main-content, .modal {
   height: 52px;
 }
 .auth-field-input-floating {
-  padding: 18px 10px 6px 0;
+  padding: 22px 10px 6px 0;
   height: 100%;
+  line-height: 1.4;
 }
 /* Hide placeholder text visually when label is resting over the field.
    The placeholder attribute must still exist for browser autofill to work. */
@@ -1032,6 +1033,7 @@ body, .app-layout, .sidebar, .card, .main-content, .modal {
   color: var(--text3);
   pointer-events: none;
   transition: all 0.2s cubic-bezier(0.4,0,0.2,1);
+  line-height: 1.1;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -1039,7 +1041,7 @@ body, .app-layout, .sidebar, .card, .main-content, .modal {
   font-family: 'DM Sans', sans-serif;
 }
 .auth-float-label-up {
-  top: 10px;
+  top: 6px;
   transform: translateY(0);
   font-size: 10px;
   color: var(--accent);

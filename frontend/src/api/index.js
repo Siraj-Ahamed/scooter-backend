@@ -63,7 +63,7 @@ export const zoneAPI = {
   create: d       => api.post('/zones', d),
   update: (id, d) => api.patch(`/zones/${id}`, d),
   delete: id      => api.delete(`/zones/${id}`),
-  assign: (id, d) => api.patch(`/zones/${id}/assign`, d),   // { vehicleId, assign: true|false }
+  assign: (id, d) => api.patch(`/zones/${id}/assign`, d),
 }
 
 // ── Trips ─────────────────────────────────────────────────────────────────────
@@ -73,6 +73,17 @@ export const tripAPI = {
   get:    id => api.get(`/trips/${id}`),
   start:  d  => api.post('/trips/start', d),
   end:    id => api.post(`/trips/${id}/end`),
+}
+
+// ── Analytics ─────────────────────────────────────────────────────────────────
+export const analyticsAPI = {
+  summary:            p => api.get('/analytics/summary', { params: p }),
+  tripsOverTime:      p => api.get('/analytics/trips-over-time', { params: p }),
+  distancePerVehicle: p => api.get('/analytics/distance-per-vehicle', { params: p }),
+  alertsByType:       p => api.get('/analytics/alerts-by-type', { params: p }),
+  peakHours:          p => api.get('/analytics/peak-hours', { params: p }),
+  fleetStatus:        () => api.get('/analytics/fleet-status'),
+  topRiders:          p => api.get('/analytics/top-riders', { params: p }),
 }
 
 // ── Alerts ────────────────────────────────────────────────────────────────────

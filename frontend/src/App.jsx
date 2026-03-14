@@ -12,6 +12,7 @@ import TripsPage from "./pages/TripsPage";
 import AlertsPage from "./pages/AlertsPage";
 import VehicleDetail from "./pages/VehicleDetail";
 import ZonesPage from "./pages/ZonesPage";
+import AnalyticsPage from "./pages/AnalyticsPage";
 
 function Protected({ children }) {
   const { user, loading } = useAuth();
@@ -37,9 +38,10 @@ export default function App() {
           <Route path="/map"            element={<Protected><MapPage /></Protected>} />
           <Route path="/vehicles"       element={<Protected><VehiclesPage /></Protected>} />
           <Route path="/vehicles/:id"   element={<Protected><VehicleDetail /></Protected>} />
-          <Route path="/zones"           element={<Protected><ZonesPage /></Protected>} />
+          <Route path="/zones"          element={<Protected><ZonesPage /></Protected>} />
           <Route path="/trips"          element={<Protected><TripsPage /></Protected>} />
           <Route path="/alerts"         element={<Protected><AlertsPage /></Protected>} />
+          <Route path="/analytics"      element={<Protected><AnalyticsPage /></Protected>} />
 
           {/* Legacy redirects so old bookmarks still work */}
           <Route path="/scooters"     element={<Navigate to="/vehicles" replace />} />

@@ -231,21 +231,7 @@ function InfoRow({ icon, label, value }) {
 
 function formatSignal(signal) {
   if (!signal || (signal.rssi === null && signal.ber === null) || (signal.rssi === undefined && signal.ber === undefined)) return '—'
-  const rssi = Number.isFinite(signal.rssi) ? signal.rssi : null
-  const ber  = Number.isFinite(signal.ber) ? signal.ber : null
-
-  if (rssi === null) return '—'
-
-  let level = 'Weak'
-  let bars = '●○○○'
-  if (rssi >= -70) { level = 'Strong'; bars = '●●●●' }
-  else if (rssi >= -85) { level = 'Good'; bars = '●●●○' }
-  else if (rssi >= -100) { level = 'Fair'; bars = '●●○○' }
-
-  if (ber !== null && ber >= 5) {
-    level = 'Poor'
-    bars = '▂'
-  }
-
-  return `${level} ${bars}`
+  const rssi = signal.rssi ?? '—'
+  const ber  = signal.ber ?? '—'
+  return `${rssi} / ${ber}`
 }

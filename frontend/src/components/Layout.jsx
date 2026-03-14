@@ -9,6 +9,7 @@ import {
     Wifi,
     WifiOff,
     Layers,
+    BarChart2,
 } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import { useSocket } from "../context/SocketContext";
@@ -20,7 +21,8 @@ const navItems = [
     { to: "/vehicles", label: "Fleet", icon: Truck },
     { to: "/zones", label: "Zones", icon: Layers },
     { to: "/trips", label: "Trips", icon: Navigation },
-    { to: "/alerts", label: "Alerts", icon: Bell },
+    { to: "/alerts",    label: "Alerts",    icon: Bell },
+    { to: "/analytics", label: "Analytics",  icon: BarChart2 },
 ];
 
 export default function Layout({ children }) {
