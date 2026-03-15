@@ -1,4 +1,4 @@
-const turf                 = require("@turf/turf");
+const { getDistance }      = require("geolib");
 const { getClient }        = require("../config/mqtt");
 const Scooter              = require("../models/Scooter");
 const Geofence             = require("../models/Geofence");
@@ -311,11 +311,10 @@ async function trackTrip(scooter, point) {
     if (trip.route.length >= 2) {
       const prev = trip.route[trip.route.length - 2];
       const curr = trip.route[trip.route.length - 1];
-      trip.distanceKm += turf.distance(
-        turf.point([prev.lng, prev.lat]),
-        turf.point([curr.lng, curr.lat]),
-        { units: "kilometers" }
-      );
+      trip.distanceKm += getDistance(
+        { latitude: prev.lat, longitude: prev.lng },
+        { latitude: curr.lat, longitude: curr.lng }
+      ) / 1000; // geolib returns metres, convert to km
     }
 
     const movingSpeeds = trip.route.map((p) => p.speed).filter((s) => s > 0);
