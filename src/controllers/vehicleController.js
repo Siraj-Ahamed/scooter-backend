@@ -3,6 +3,7 @@ const { getRedisClient } = require('../config/redis');
 const { publishCommand } = require('../mqtt/mqttClient');
 const { sendSuccess, sendError } = require('../utils/apiResponse');
 const logger = require('../utils/logger');
+const { audit } = require('../services/auditService');
 
 const getVehicles = async (req, res, next) => {
   try {
@@ -29,6 +30,7 @@ const createVehicle = async (req, res, next) => {
     const { name, deviceId, vehicleType, plateNumber, model, color, year } = req.body;
     const vehicle = await Vehicle.create({ name, deviceId, vehicleType, plateNumber, model, color, year, owner: req.user._id });
     logger.info(`🚗 Vehicle created: ${deviceId} (${vehicleType})`);
+    await audit(req, { action: 'vehicle.create', description: `Registered new ${vehicleType} "${name}" (${deviceId})`, resourceType: 'vehicle', resourceId: vehicle._id, resourceName: name });
     return sendSuccess(res, { statusCode: 201, message: 'Vehicle registered successfully', data: vehicle });
   } catch (error) { next(error); }
 };
@@ -55,6 +57,7 @@ const updateVehicle = async (req, res, next) => {
       { new: true, runValidators: true }
     );
     if (!vehicle) return sendError(res, { statusCode: 404, message: 'Vehicle not found.' });
+    await audit(req, { action: 'vehicle.update', description: `Updated vehicle "${vehicle.name}"`, resourceType: 'vehicle', resourceId: vehicle._id, resourceName: vehicle.name, meta: updates });
     return sendSuccess(res, { message: 'Vehicle updated', data: vehicle });
   } catch (error) { next(error); }
 };
@@ -64,6 +67,7 @@ const deleteVehicle = async (req, res, next) => {
     const vehicle = await Vehicle.findOne({ _id: req.params.id, owner: req.user._id });
     if (!vehicle) return sendError(res, { statusCode: 404, message: 'Vehicle not found.' });
     if (vehicle.status === 'rented') return sendError(res, { statusCode: 400, message: 'Cannot delete a vehicle that is currently rented.' });
+    await audit(req, { action: 'vehicle.delete', description: `Deleted vehicle "${vehicle.name}" (${vehicle.deviceId})`, resourceType: 'vehicle', resourceId: vehicle._id, resourceName: vehicle.name });
     await vehicle.deleteOne();
     return sendSuccess(res, { message: 'Vehicle removed successfully' });
   } catch (error) { next(error); }
@@ -178,6 +182,7 @@ const sendVehicleCommand = async (req, res, next) => {
     if (action === 'lock_engine')   await Vehicle.updateOne({ _id: vehicle._id }, { $set: { status: 'locked',    isEngineOn: false } });
     else if (action === 'unlock_engine') await Vehicle.updateOne({ _id: vehicle._id }, { $set: { status: 'available', isEngineOn: true  } });
 
+    await audit(req, { action: 'vehicle.command', description: `Sent "${action}" to vehicle ${vehicle.deviceId}`, resourceType: 'vehicle', resourceId: vehicle._id, resourceName: vehicle.deviceId, meta: { action } });
     return sendSuccess(res, { message: `Command '${action}' sent to vehicle` });
   } catch (error) { next(error); }
 };

@@ -16,6 +16,7 @@ const tripRoutes = require('./routes/trip.routes');
 const alertRoutes = require('./routes/alert.routes');
 const zoneRoutes       = require('./routes/zone.routes');
 const analyticsRoutes  = require('./routes/analytics.routes');
+const settingsRoutes   = require('./routes/settings.routes');
 
 const app = express();
 
@@ -62,6 +63,7 @@ app.use('/api/v1/zones', zoneRoutes);
 app.use('/api/v1/trips', tripRoutes);
 app.use('/api/v1/alerts',    alertRoutes);
 app.use('/api/v1/analytics', analyticsRoutes);
+app.use('/api/v1/settings',  settingsRoutes);
 
 app.use(notFound);
 app.use(errorHandler);

@@ -10,23 +10,28 @@ const toOid = id => new mongoose.Types.ObjectId(id.toString())
 const getSummary = async (req, res, next) => {
   try {
     const owner = toOid(req.user._id)
+    // since filters all time-series metrics; fleet size & online are always current
+    const since = req.query.since ? new Date(req.query.since) : new Date(0)
+    const tripFilter  = { owner, startedAt: { $gte: since } }
+    const alertFilter = { owner, isRead: false, createdAt: { $gte: since } }
+
     const [
       totalTrips, activeTrips, completedTrips,
       totalVehicles, onlineVehicles, unreadAlerts,
       distAgg, durationAgg,
     ] = await Promise.all([
-      Trip.countDocuments({ owner }),
+      Trip.countDocuments(tripFilter),
       Trip.countDocuments({ owner, status: 'active' }),
-      Trip.countDocuments({ owner, status: 'completed' }),
+      Trip.countDocuments({ ...tripFilter, status: 'completed' }),
       Vehicle.countDocuments({ owner }),
       Vehicle.countDocuments({ owner, isOnline: true }),
-      Alert.countDocuments({ owner, isRead: false }),
+      Alert.countDocuments(alertFilter),
       Trip.aggregate([
-        { $match: { owner, status: 'completed' } },
+        { $match: { ...tripFilter, status: 'completed' } },
         { $group: { _id: null, total: { $sum: '$distanceKm' } } },
       ]),
       Trip.aggregate([
-        { $match: { owner, status: 'completed' } },
+        { $match: { ...tripFilter, status: 'completed' } },
         { $group: { _id: null, total: { $sum: '$durationMinutes' } } },
       ]),
     ])
