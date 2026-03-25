@@ -9,14 +9,15 @@ const config = require('./config');
 const logger = require('./utils/logger');
 const { errorHandler, notFound } = require('./middleware/errorHandler');
 
-const authRoutes = require('./routes/auth.routes');
-const scooterRoutes = require('./routes/scooter.routes');
-const vehicleRoutes = require('./routes/vehicle.routes');
-const tripRoutes = require('./routes/trip.routes');
-const alertRoutes = require('./routes/alert.routes');
-const zoneRoutes       = require('./routes/zone.routes');
-const analyticsRoutes  = require('./routes/analytics.routes');
-const settingsRoutes   = require('./routes/settings.routes');
+const authRoutes      = require('./routes/auth.routes');
+const scooterRoutes   = require('./routes/scooter.routes');
+const vehicleRoutes   = require('./routes/vehicle.routes');
+const tripRoutes      = require('./routes/trip.routes');
+const alertRoutes     = require('./routes/alert.routes');
+const zoneRoutes      = require('./routes/zone.routes');
+const analyticsRoutes = require('./routes/analytics.routes');
+const settingsRoutes  = require('./routes/settings.routes');
+const zscoreRoutes    = require('./routes/zscore.routes');
 
 const app = express();
 
@@ -56,14 +57,15 @@ app.get('/health', (req, res) => {
   res.status(200).json({ status: 'ok', environment: config.env, timestamp: new Date().toISOString() });
 });
 
-app.use('/api/v1/auth', authRoutes);
-app.use('/api/v1/scooters', scooterRoutes); // legacy alias kept
-app.use('/api/v1/vehicles', vehicleRoutes);
-app.use('/api/v1/zones', zoneRoutes);
-app.use('/api/v1/trips', tripRoutes);
+app.use('/api/v1/auth',      authRoutes);
+app.use('/api/v1/scooters',  scooterRoutes);  // legacy alias kept
+app.use('/api/v1/vehicles',  vehicleRoutes);
+app.use('/api/v1/zones',     zoneRoutes);
+app.use('/api/v1/trips',     tripRoutes);
 app.use('/api/v1/alerts',    alertRoutes);
 app.use('/api/v1/analytics', analyticsRoutes);
 app.use('/api/v1/settings',  settingsRoutes);
+app.use('/api/v1/zscore',    zscoreRoutes);   // ← SIGEBRA Z-Score
 
 app.use(notFound);
 app.use(errorHandler);
