@@ -21,6 +21,10 @@ const zscoreRoutes    = require('./routes/zscore.routes');
 
 const app = express();
 
+// Render (and most managed platforms) run behind a proxy and set X-Forwarded-For.
+// Trust the first proxy hop so rate-limit can identify real client IPs.
+app.set('trust proxy', 1);
+
 app.use(helmet());
 app.use(cors({ origin: config.cors.origins, credentials: true, methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'] }));
 
