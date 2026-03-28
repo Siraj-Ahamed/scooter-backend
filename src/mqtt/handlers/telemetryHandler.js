@@ -1,4 +1,5 @@
 const Vehicle = require('../../models/Vehicle');
+const Device  = require('../../models/Device');
 const { getRedisClient } = require('../../config/redis');
 const { getIO } = require('../../socket/socketServer');
 const { publishCommand } = require('../mqttClient');
@@ -23,9 +24,9 @@ const parseGpsCoordinate = (value, direction, axis) => {
 };
 
 const normalizeTelemetryPayload = (rawPayload = {}) => {
-  const location = rawPayload.location || {};
-  const batteryObj = rawPayload.battery || {};
-  const signalObj = rawPayload.signal || {};
+  const location  = rawPayload.location  || {};
+  const batteryObj = rawPayload.battery  || {};
+  const signalObj  = rawPayload.signal   || {};
 
   const lat = location.latitude !== undefined
     ? parseGpsCoordinate(location.latitude, location.lat_dir, 'lat')
@@ -34,9 +35,9 @@ const normalizeTelemetryPayload = (rawPayload = {}) => {
     ? parseGpsCoordinate(location.longitude, location.lon_dir, 'lng')
     : toNumber(rawPayload.lng);
 
-  const speedKnots = toNumber(location.speed);
+  const speedKnots   = toNumber(location.speed);
   const fallbackSpeed = toNumber(rawPayload.speed);
-  const speed = speedKnots !== null ? speedKnots * 1.852 : (fallbackSpeed ?? 0);
+  const speed   = speedKnots !== null ? speedKnots * 1.852 : (fallbackSpeed ?? 0);
   const battery = toNumber(batteryObj.percentage) ?? toNumber(rawPayload.battery) ?? 0;
   const odometer = toNumber(rawPayload.odometer) ?? 0;
 
@@ -75,10 +76,17 @@ const handleTelemetry = async (deviceId, payload) => {
     .populate('currentTrip')
     .populate('assignedZones')
     .populate('assignedZone');
+
   if (!vehicle) {
     logger.warn(`Telemetry from unknown deviceId: ${resolvedDeviceId || deviceId}`);
     return;
   }
+
+  // ── Update Device.lastSeenAt (fire-and-forget, non-blocking) ────────────────
+  Device.updateOne(
+    { serialNumber: resolvedDeviceId, owner: vehicle.owner },
+    { $set: { lastSeenAt: timestamp || new Date() } }
+  ).catch(() => {}); // silent — device record may not exist for legacy installs
 
   const redis = getRedisClient();
   if (redis) {

@@ -13,6 +13,8 @@ const auditLogSchema = new mongoose.Schema(
         // vehicles
         'vehicle.create', 'vehicle.update', 'vehicle.delete',
         'vehicle.command', 'vehicle.geofence',
+        // devices
+        'device.create', 'device.update', 'device.delete', 'device.assign',
         // trips
         'trip.start', 'trip.end',
         // zones
@@ -25,18 +27,18 @@ const auditLogSchema = new mongoose.Schema(
         'export.csv', 'export.pdf',
       ],
     },
-    // human-readable sentence e.g. "Sent lock_engine to vehicle Scooter-01"
     description: { type: String, required: true },
-    // optional structured metadata
     meta: { type: mongoose.Schema.Types.Mixed, default: {} },
-    // resource that was affected
-    resourceType: { type: String, enum: ['vehicle','trip','zone','alert','user','export',null], default: null },
+    resourceType: {
+      type: String,
+      enum: ['vehicle', 'device', 'trip', 'zone', 'alert', 'user', 'export', null],
+      default: null,
+    },
     resourceId:   { type: mongoose.Schema.Types.ObjectId, default: null },
     resourceName: { type: String, default: '' },
-    // request context
     ip:        { type: String, default: '' },
     userAgent: { type: String, default: '' },
-    status:    { type: String, enum: ['success','failure'], default: 'success' },
+    status:    { type: String, enum: ['success', 'failure'], default: 'success' },
   },
   { timestamps: true }
 )
