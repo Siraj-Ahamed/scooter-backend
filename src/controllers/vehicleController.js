@@ -27,10 +27,13 @@ const getVehicles = async (req, res, next) => {
 
 const createVehicle = async (req, res, next) => {
   try {
+    const mongoose = require('mongoose');
     const { name, deviceId, vehicleType, plateNumber, model, color, year } = req.body;
-    const vehicle = await Vehicle.create({ name, deviceId, vehicleType, plateNumber, model, color, year, owner: req.user._id });
-    logger.info(`🚗 Vehicle created: ${deviceId} (${vehicleType})`);
-    await audit(req, { action: 'vehicle.create', description: `Registered new ${vehicleType} "${name}" (${deviceId})`, resourceType: 'vehicle', resourceId: vehicle._id, resourceName: name });
+    const cleanDeviceId = (deviceId || '').toString().trim();
+    const finalDeviceId = cleanDeviceId || `UNASSIGNED-${new mongoose.Types.ObjectId().toString()}`;
+    const vehicle = await Vehicle.create({ name, deviceId: finalDeviceId, vehicleType, plateNumber, model, color, year, owner: req.user._id });
+    logger.info(`🚗 Vehicle created: ${finalDeviceId} (${vehicleType})`);
+    await audit(req, { action: 'vehicle.create', description: `Registered new ${vehicleType} "${name}" (${finalDeviceId})`, resourceType: 'vehicle', resourceId: vehicle._id, resourceName: name });
     return sendSuccess(res, { statusCode: 201, message: 'Vehicle registered successfully', data: vehicle });
   } catch (error) { next(error); }
 };
