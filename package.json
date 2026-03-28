@@ -4,6 +4,7 @@
   "description": "Production backend for scooter rental platform",
   "main": "src/server.js",
   "scripts": {
+    "build": "echo \"No build step\"",
     "start": "node src/server.js",
     "dev": "nodemon src/server.js",
     "tunnel:ngrok": "ngrok http 5000",
