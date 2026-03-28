@@ -1,5 +1,6 @@
 const Vehicle = require('../../models/Vehicle');
 const Device  = require('../../models/Device');
+const Trip    = require('../../models/Trip');
 const { getRedisClient } = require('../../config/redis');
 const { getIO } = require('../../socket/socketServer');
 const { publishCommand } = require('../mqttClient');
@@ -121,10 +122,18 @@ const handleTelemetry = async (deviceId, payload) => {
 
   await Vehicle.updateOne({ _id: vehicle._id }, { $set: updateSet });
 
-  if (vehicle.currentTrip && redis) {
-    const routeKey = `trip:route:${vehicle.currentTrip._id}`;
-    await redis.rPush(routeKey, JSON.stringify({ coordinates, speed, timestamp }));
-    await redis.expire(routeKey, 86400);
+  if (vehicle.currentTrip) {
+    if (redis) {
+      const routeKey = `trip:route:${vehicle.currentTrip._id}`;
+      await redis.rPush(routeKey, JSON.stringify({ coordinates, speed, timestamp }));
+      await redis.expire(routeKey, 86400);
+    } else {
+      // Redis unavailable — persist route points directly in MongoDB (bounded)
+      await Trip.updateOne(
+        { _id: vehicle.currentTrip._id },
+        { $push: { route: { $each: [{ coordinates, speed, timestamp }], $slice: -2000 } } }
+      );
+    }
   }
 
   const assignedZones = Array.isArray(vehicle.assignedZones) && vehicle.assignedZones.length

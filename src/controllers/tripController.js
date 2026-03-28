@@ -56,6 +56,9 @@ const endTrip = async (req, res, next) => {
         distanceKm = calculateRouteDistance(route.map((p) => ({ lat: p.coordinates[1], lng: p.coordinates[0] })));
       }
       await redis.del(routeKey);
+    } else if (Array.isArray(trip.route) && trip.route.length > 0) {
+      route = trip.route;
+      distanceKm = calculateRouteDistance(route.map((p) => ({ lat: p.coordinates[1], lng: p.coordinates[0] })));
     }
 
     const endCoordinates = trip.scooter.location?.coordinates || [0, 0];
